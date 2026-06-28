@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Image Tagger — Azure AI Vision</title>
+<style>
+  :root {
+    --navy:   #0A2342;
+    --azure:  #0078D4;
+    --azureL: #50B0F0;
+    --accent: #00B4D8;
+    --green:  #107C10;
+    --offW:   #F0F6FF;
+    --white:  #FFFFFF;
+    --slate:  #334155;
+    --muted:  #64748B;
+    --card:   #FFFFFF;
+    --border: #E2ECF7;
+    --radius: 14px;
+    --shadow: 0 4px 24px rgba(0,120,212,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--offW);
+    color: var(--slate);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--navy);
+    color: white;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
+  .header-icon {
+    width: 40px; height: 40px;
+    background: var(--azure);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.3px; }
+  header p  { font-size: 0.78rem; color: var(--azureL); margin-top: 1px; }
+  .badge {
+    margin-left: auto;
+    background: rgba(0,180,216,0.18);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* ── TWO COLUMN ── */
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-card {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-header {
+    background: var(--navy);
+    color: white;
+    padding: 14px 20px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .drop-zone {
+    border: 2.5px dashed var(--border);
+    border-radius: 10px;
+    margin: 20px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    background: var(--offW);
+  }
+  .drop-zone.dragover {
+    border-color: var(--azure);
+    background: #EAF4FF;
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
+  }
+  .drop-icon { font-size: 2.8rem; margin-bottom: 10px; }
+  .drop-zone h3 { font-size: 1rem; color: var(--navy); margin-bottom: 6px; }
+  .drop-zone p  { font-size: 0.8rem; color: var(--muted); }
+  .or-divider {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin: 0 20px 8px;
+    position: relative;
+  }
+  .or-divider::before, .or-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 42%;
+    height: 1px;
+    background: var(--border);
+  }
+  .or-divider::before { left: 0; }
+  .or-divider::after  { right: 0; }
+
+  .url-row { display: flex; gap: 8px; padding: 0 20px 18px; }
+  .url-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--slate);
+    transition: border-color 0.2s;
+  }
+  .url-row input:focus { outline: none; border-color: var(--azure); }
+  .btn-analyze {
+    padding: 8px 18px;
+    background: var(--azure);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+  .btn-analyze:hover { background: #005ea8; }
+  .btn-analyze:disabled { background: #aac; cursor: not-allowed; }
+
+  /* ── PREVIEW ── */
+  #preview-wrap { display: none; padding: 0 20px 20px; }
+  #preview-img {
+    width: 100%;
+    max-height: 280px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .analyze-btn-big {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 13px;
+    background: linear-gradient(135deg, var(--azure), var(--accent));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.2s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .analyze-btn-big:hover { opacity: 0.9; transform: translateY(-1px); }
+  .analyze-btn-big:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  /* ── LOADING SPINNER ── */
+  .spinner {
+    width: 22px; height: 22px;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RESULTS PANEL ── */
+  .results-card {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .results-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 50px 20px;
+    color: var(--muted);
+    text-align: center;
+    gap: 10px;
+  }
+  .results-placeholder .big-icon { font-size: 3rem; opacity: 0.4; }
+  .results-content { display: none; padding: 20px; overflow-y: auto; }
+
+  /* ── RESULT SECTIONS ── */
+  .result-section { margin-bottom: 22px; }
+  .result-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--azure);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .caption-box {
+    background: linear-gradient(135deg, #EAF4FF, #E0F7FA);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--azure);
+  }
+  .caption-text {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--navy);
+    line-height: 1.5;
+  }
+  .confidence-badge {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    color: var(--green);
+    font-weight: 700;
+    background: #E6F4EA;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* Tags */
+  .tags-wrap { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: default;
+    transition: transform 0.15s;
+  }
+  .tag:hover { transform: translateY(-1px); }
+  .tag-high   { background: #EAF4FF; color: var(--azure); border: 1.5px solid var(--azureL); }
+  .tag-medium { background: #F0FDF4; color: #15803D;       border: 1.5px solid #86EFAC; }
+  .tag-low    { background: #FFF7ED; color: #C2410C;       border: 1.5px solid #FDBA74; }
+  .tag-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .tag-high .tag-dot   { background: var(--azure); }
+  .tag-medium .tag-dot { background: #22C55E; }
+  .tag-low .tag-dot    { background: #F97316; }
+
+  /* Confidence bars */
+  .bar-list { display: flex; flex-direction: column; gap: 8px; }
+  .bar-item label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--slate);
+    margin-bottom: 3px;
+  }
+  .bar-track { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; }
+  .bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--azure), var(--accent));
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* OCR */
+  .ocr-box {
+    background: #F8F9FA;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--slate);
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+    line-height: 1.7;
+  }
+  .ocr-empty { color: var(--muted); font-style: italic; font-family: 'Segoe UI', sans-serif; }
+
+  /* Error */
+  .error-box {
+    background: #FFF2F2;
+    border: 1.5px solid #FCA5A5;
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: #991B1B;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+
+  /* ── HOW IT WORKS FOOTER ── */
+  .how-it-works {
+    margin-top: 28px;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 24px;
+  }
+  .how-it-works h3 { font-size: 0.95rem; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+  .flow-steps {
+    display: flex;
+    gap: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .flow-step {
+    background: var(--offW);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 120px;
+    flex: 1;
+  }
+  .flow-step .step-icon { font-size: 1.4rem; margin-bottom: 4px; }
+  .flow-step .step-label { font-size: 0.75rem; font-weight: 700; color: var(--navy); }
+  .flow-step .step-sub { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+  .flow-arrow { color: var(--azure); font-size: 1.2rem; flex-shrink: 0; }
+
+  /* ── DEMO BADGE ── */
+  .demo-note {
+    background: #FFF3CD;
+    border: 1px solid #FFC107;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    color: #856404;
+    margin: 0 20px 16px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-icon">👁️</div>
+  <div>
+    <h1>Smart Image Tagger</h1>
+    <p>Powered by Azure AI Vision · Deployed on Azure App Service</p>
+  </div>
+  <span class="badge">AZURE AI</span>
+</header>
+
+<main>
+  <div class="layout">
+    <!-- LEFT: UPLOAD -->
+    <div class="upload-card">
+      <div class="card-header">📤 Upload or Paste Image URL</div>
+
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+        <div class="drop-icon">🖼️</div>
+        <h3>Drag & Drop an image here</h3>
+        <p>or click to browse files<br><span style="font-size:0.72rem;margin-top:4px;display:block">JPG, PNG, GIF, WEBP supported</span></p>
+      </div>
+
+      <div class="or-divider">or use a URL</div>
+      <div class="url-row">
+        <input type="url" id="url-input" placeholder="https://upload.wikimedia.org/wikipedia/commons/thumb/..." />
+        <button class="btn-analyze" onclick="analyzeFromURL()">Analyze</button>
+      </div>
+
+      <div class="demo-note">
+        💡 The Azure AI Vision key is configured server-side in App Service settings — it never touches this page or your browser.
+      </div>
+
+      <!-- Preview -->
+      <div id="preview-wrap">
+        <img id="preview-img" src="" alt="Preview">
+        <button class="analyze-btn-big" id="analyze-btn" onclick="analyzeCurrentImage()">
+          <div class="spinner" id="spinner"></div>
+          <span id="btn-text">✨ Analyze with Azure AI</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS -->
+    <div class="results-card">
+      <div class="card-header">🤖 AI Analysis Results</div>
+      <div class="results-placeholder" id="results-placeholder">
+        <div class="big-icon">🔍</div>
+        <strong>Upload an image to get started</strong>
+        <p style="font-size:0.8rem">Azure AI will analyze it for captions,<br>tags, OCR text, and confidence scores</p>
+      </div>
+      <div class="results-content" id="results-content">
+        <div id="error-box" class="error-box" style="display:none"></div>
+        <!-- Caption -->
+        <div class="result-section">
+          <div class="result-label">🗣️ AI Caption</div>
+          <div class="caption-box">
+            <div class="caption-text" id="res-caption">—</div>
+            <span class="confidence-badge" id="res-caption-conf"></span>
+          </div>
+        </div>
+        <!-- Tags -->
+        <div class="result-section">
+          <div class="result-label">🏷️ Detected Tags</div>
+          <div class="tags-wrap" id="res-tags"></div>
+        </div>
+        <!-- Top 5 confidence bars -->
+        <div class="result-section">
+          <div class="result-label">📊 Confidence Scores (Top 5)</div>
+          <div class="bar-list" id="res-bars"></div>
+        </div>
+        <!-- OCR -->
+        <div class="result-section">
+          <div class="result-label">📝 Extracted Text (OCR)</div>
+          <div class="ocr-box" id="res-ocr"><span class="ocr-empty">No text detected in this image</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="how-it-works">
+    <h3>⚡ How This Works — Azure AI Vision Pipeline</h3>
+    <div class="flow-steps">
+      <div class="flow-step"><div class="step-icon">🖼️</div><div class="step-label">Your Image</div><div class="step-sub">Upload or URL</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-icon">🐍</div><div class="step-label">Flask Backend</div><div class="step-sub">Holds the API key</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-icon">☁️</div><div class="step-label">Azure AI Vision</div><div class="step-sub">Microsoft's GPU Cloud</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-icon">📦</div><div class="step-label">JSON Response</div><div class="step-sub">~200–800ms</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-icon">✨</div><div class="step-label">Results Displayed</div><div class="step-sub">Tags, Caption, OCR</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────
+let currentImageUrl = null;
+let currentImageBase64 = null;
+
+// ── DRAG & DROP ────────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleFile(file);
+});
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentImageBase64 = e.target.result; // full data URL
+    currentImageUrl = null;
+    showPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function analyzeFromURL() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  currentImageUrl = url;
+  currentImageBase64 = null;
+  showPreview(url);
+}
+
+function showPreview(src) {
+  const img = document.getElementById('preview-img');
+  img.src = src;
+  document.getElementById('preview-wrap').style.display = 'block';
+  resetResults();
+}
+
+// ── ANALYZE ────────────────────────────────────────────────────────────
+// Calls our own Flask backend at /analyze. The backend holds the
+// Azure key (set via App Service > Configuration > Application settings)
+// and forwards the request to Azure AI Vision server-side.
+async function analyzeCurrentImage() {
+  setLoading(true);
+  resetResults();
+
+  try {
+    let body;
+    if (currentImageUrl) {
+      body = JSON.stringify({ url: currentImageUrl });
+    } else if (currentImageBase64) {
+      body = JSON.stringify({ image_base64: currentImageBase64 });
+    } else {
+      throw new Error('No image selected.');
+    }
+
+    const resp = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.error || `Server error ${resp.status}`);
+    }
+
+    showResults(data);
+
+  } catch (err) {
+    showError(err.message || 'Something went wrong.');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setLoading(on) {
+  const btn = document.getElementById('analyze-btn');
+  const spinner = document.getElementById('spinner');
+  const txt = document.getElementById('btn-text');
+  btn.disabled = on;
+  spinner.style.display = on ? 'block' : 'none';
+  txt.textContent = on ? 'Analyzing with Azure AI…' : '✨ Analyze with Azure AI';
+}
+
+function resetResults() {
+  document.getElementById('error-box').style.display = 'none';
+  document.getElementById('results-placeholder').style.display = 'flex';
+  document.getElementById('results-content').style.display = 'none';
+}
+
+function showError(msg) {
+  document.getElementById('results-placeholder').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+  const eb = document.getElementById('error-box');
+  eb.style.display = 'block';
+  eb.innerHTML = `❌ <strong>Error:</strong> ${msg}<br><br>
+    <small>Common fixes:<br>
+    • Confirm <code>VISION_KEY</code> and <code>VISION_ENDPOINT</code> are set in App Service → Configuration → Application settings<br>
+    • Endpoint format should be <code>https://YOUR-RESOURCE.cognitiveservices.azure.com</code><br>
+    • Restart the App Service after changing settings</small>`;
+}
+
+function showResults(data) {
+  document.getElementById('results-placeholder').style.display = 'none';
+  document.getElementById('results-content').style.display = 'block';
+  document.getElementById('error-box').style.display = 'none';
+
+  // CAPTION
+  const cap = data.captionResult || data.description?.captions?.[0];
+  if (cap) {
+    document.getElementById('res-caption').textContent = cap.text || cap.value || '—';
+    const conf = cap.confidence;
+    if (conf !== undefined) {
+      const pct = Math.round(conf * 100);
+      document.getElementById('res-caption-conf').textContent = `${pct}% confidence`;
+    }
+  } else {
+    document.getElementById('res-caption').textContent = 'No caption returned';
+  }
+
+  // TAGS
+  const tags = data.tagsResult?.values || data.tags || [];
+  const tagsWrap = document.getElementById('res-tags');
+  tagsWrap.innerHTML = '';
+  if (tags.length === 0) {
+    tagsWrap.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">No tags returned</span>';
+  } else {
+    tags.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    tags.forEach(tag => {
+      const conf = tag.confidence || 0;
+      const cls = conf > 0.8 ? 'tag-high' : conf > 0.5 ? 'tag-medium' : 'tag-low';
+      const el = document.createElement('span');
+      el.className = `tag ${cls}`;
+      el.innerHTML = `<span class="tag-dot"></span>${tag.name} <span style="opacity:0.6;font-size:0.7rem">${Math.round(conf*100)}%</span>`;
+      tagsWrap.appendChild(el);
+    });
+  }
+
+  // CONFIDENCE BARS (top 5)
+  const barsEl = document.getElementById('res-bars');
+  barsEl.innerHTML = '';
+  const top5 = tags.slice(0, 5);
+  top5.forEach(tag => {
+    const pct = Math.round((tag.confidence || 0) * 100);
+    const div = document.createElement('div');
+    div.className = 'bar-item';
+    div.innerHTML = `
+      <label><span>${tag.name}</span><span>${pct}%</span></label>
+      <div class="bar-track"><div class="bar-fill" style="width:0%" data-target="${pct}%"></div></div>`;
+    barsEl.appendChild(div);
+  });
+  // Animate bars after render
+  setTimeout(() => {
+    document.querySelectorAll('.bar-fill').forEach(bar => {
+      bar.style.width = bar.dataset.target;
+    });
+  }, 80);
+
+  // OCR
+  const readResult = data.readResult || data.analyzeResult;
+  const ocrEl = document.getElementById('res-ocr');
+  let ocrText = '';
+  if (readResult) {
+    const blocks = readResult.blocks || readResult.readResults || [];
+    blocks.forEach(block => {
+      const lines = block.lines || [];
+      lines.forEach(line => {
+        ocrText += (line.text || line.words?.map(w=>w.text).join(' ') || '') + '\n';
+      });
+    });
+  }
+  if (ocrText.trim()) {
+    ocrEl.textContent = ocrText.trim();
+    ocrEl.style.color = 'var(--slate)';
+  } else {
+    ocrEl.innerHTML = '<span class="ocr-empty">No text detected in this image</span>';
+  }
+}
+</script>
+</body>
+  </html>
